@@ -88,10 +88,11 @@ export default function Login({ onLogin }) {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
     >
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <View style={styles.inner}>
+        <View style={[styles.inner, { justifyContent: 'flex-start' }]}>
           <View style={styles.logoContainer}>
             <Text style={styles.title}>Bienvenue</Text>
             <Text style={styles.subtitle}>Connectez-vous pour continuer</Text>
