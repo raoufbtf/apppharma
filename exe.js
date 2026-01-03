@@ -1,10 +1,13 @@
 // seedMedicaments.js
+
+import fs from "fs";
+import csv from "csv-parser";
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, addDoc } from "firebase/firestore";
 
-// Remplace par ta config Firebase
+// 🔥 Firebase config
 const firebaseConfig = {
-   apiKey: "AIzaSyACaimDkZCMtdp7vijHODn_Mml5-PlIC5c",
+  apiKey: "AIzaSyACaimDkZCMtdp7vijHODn_Mml5-PlIC5c",
   authDomain: "tpmobile-a2ebd.firebaseapp.com",
   projectId: "tpmobile-a2ebd",
   storageBucket: "tpmobile-a2ebd.firebasestorage.app",
@@ -13,35 +16,39 @@ const firebaseConfig = {
   measurementId: "G-RSGZGL2EN4"
 };
 
+// 🔌 Init Firebase
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-// Générer un médicament exemple
-function generateMedicament(i) {
-  const formes = ["Comprimé", "Gélule", "Sirop", "Injection"];
-  return {
-    nom: `Médicament ${i}`,
-    dosage: `${50 + i * 5}mg`,
-    form: formes[i % formes.length],
-    description: `Description détaillée du médicament ${i}.`,
-    createdAt: new Date()
-  };
+// 📌 Collection Firestore
+const medicamentsRef = collection(db, "medicaments");
+
+// 📥 Lire le CSV et insérer dans Firestore
+async function seedMedicamentsFromCSV() {
+  const medicaments = [];
+
+  fs.createReadStream("medicines_cleaned.csv")
+    .pipe(csv())
+    .on("data", (row) => {
+      medicaments.push({
+        nom: row.Name,
+        categorie: row.Category,
+        createdAt: new Date()
+      });
+    })
+    .on("end", async () => {
+      try {
+        for (const med of medicaments) {
+          await addDoc(medicamentsRef, med);
+          console.log(`✅ Ajouté : ${med.nom}`);
+        }
+
+        console.log("🎉 Tous les médicaments ont été ajoutés avec succès !");
+      } catch (error) {
+        console.error("❌ Erreur Firestore :", error);
+      }
+    });
 }
 
-async function seedMedicaments() {
-  try {
-    const medicamentsRef = collection(db, "medicaments");
-
-    for (let i = 1; i <= 100; i++) {
-      const medicament = generateMedicament(i);
-      await addDoc(medicamentsRef, medicament);
-      console.log(`Ajouté : ${medicament.nom}`);
-    }
-
-    console.log("✅ 100 médicaments ajoutés !");
-  } catch (error) {
-    console.error("Erreur :", error);
-  }
-}
-
-seedMedicaments();
+// ▶️ Lancer le seed
+seedMedicamentsFromCSV();
