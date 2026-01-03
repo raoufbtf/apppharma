@@ -7,10 +7,11 @@ import {
   StyleSheet,
   ActivityIndicator,
   TextInput,
+  Alert,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { db } from '../firebase';
-import { collection, getDocs } from 'firebase/firestore';
+import { auth, db } from '../firebase';
+import { collection, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
 
 export default function ClientMedicineOrderScreen() {
   const navigation = useNavigation();
@@ -68,31 +69,57 @@ export default function ClientMedicineOrderScreen() {
   };
 
   // Confirmer la commande
-  const placeOrder = () => {
-    const items = Object.entries(selectedMedicines).map(([medId, qty]) => {
-      const med = medicines.find(m => m.id === medId);
-      return {
-        id: medId,
-        name: med.name || med.nom,
-        prix: med.prix,
-        quantity: qty,
-        total: med.prix * qty,
+  const placeOrder = async () => {
+    try {
+      const items = Object.entries(selectedMedicines).map(([medId, qty]) => {
+        const med = medicines.find(m => m.id === medId);
+        return {
+          id: medId,
+          name: med.name || med.nom,
+          prix: med.prix,
+          quantity: qty,
+          total: med.prix * qty,
+        };
+      });
+
+      const totalPrice = items.reduce((sum, item) => sum + item.total, 0);
+      const clientId = auth.currentUser?.uid;
+      const clientEmail = auth.currentUser?.email;
+
+      // Sauvegarder la commande dans Firestore
+      const orderData = {
+        clientId,
+        clientEmail,
+        pharmacyId,
+        pharmacyName,
+        items,
+        totalPrice,
+        status: 'pending', // pending, confirmed, completed
+        timestamp: serverTimestamp(),
+        createdAt: new Date().toISOString(),
       };
-    });
 
-    const totalPrice = items.reduce((sum, item) => sum + item.total, 0);
+      // Ajouter la commande à la collection globale "orders"
+      await addDoc(collection(db, 'orders'), orderData);
 
-    // Vous pouvez sauvegarder la commande dans Firestore ici
-    console.log('Commande:', {
-      pharmacyId,
-      pharmacyName,
-      items,
-      totalPrice,
-      timestamp: new Date(),
-    });
+      // Ajouter aussi dans les commandes de la pharmacie (pour notifications côté pharmacie)
+      await addDoc(collection(db, 'users', pharmacyId, 'orders'), orderData);
 
-    alert(`Commande confirmée!\nTotal: ${totalPrice} DA`);
-    navigation.goBack();
+      Alert.alert(
+        'Succès',
+        `Commande confirmée!\nTotal: ${totalPrice} DA\n\nLa pharmacie a été notifiée.`,
+        [
+          {
+            text: 'OK',
+            onPress: () => navigation.goBack(),
+          },
+        ]
+      );
+
+    } catch (e) {
+      console.error('Erreur lors de la sauvegarde:', e);
+      Alert.alert('Erreur', 'Impossible de confirmer la commande. Réessayez.');
+    }
   };
 
   if (loading) {
