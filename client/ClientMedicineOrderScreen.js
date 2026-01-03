@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { auth, db } from '../firebase';
-import { collection, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 export default function ClientMedicineOrderScreen() {
   const navigation = useNavigation();
@@ -99,11 +99,13 @@ export default function ClientMedicineOrderScreen() {
         createdAt: new Date().toISOString(),
       };
 
-      // Ajouter la commande à la collection globale "orders"
-      await addDoc(collection(db, 'orders'), orderData);
+      // Créer un ID unique et utiliser le même ID dans les deux collections
+      const orderRef = doc(collection(db, 'orders'));
+      await setDoc(orderRef, orderData);
 
-      // Ajouter aussi dans les commandes de la pharmacie (pour notifications côté pharmacie)
-      await addDoc(collection(db, 'users', pharmacyId, 'orders'), orderData);
+      // Écrire la même commande sous users/{pharmacyId}/orders/{sameId}
+      const pharmacyOrderRef = doc(db, 'users', pharmacyId, 'orders', orderRef.id);
+      await setDoc(pharmacyOrderRef, orderData);
 
       Alert.alert(
         'Succès',

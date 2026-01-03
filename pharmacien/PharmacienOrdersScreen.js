@@ -14,16 +14,18 @@ import { auth, db } from '../firebase';
 import { collection, query, where, onSnapshot, updateDoc, doc } from 'firebase/firestore';
 
 export default function PharmacienOrdersScreen() {
-  const [orders, setOrders] = useState([]);
+  const [pendingOrders, setPendingOrders] = useState([]);
+  const [confirmedOrders, setConfirmedOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [notificationOrder, setNotificationOrder] = useState(null);
   const [timeLeft, setTimeLeft] = useState(15);
   const [sound, setSound] = useState(null);
+  const [activeTab, setActiveTab] = useState('pending'); // 'pending' ou 'confirmed'
   const pharmacyId = auth.currentUser?.uid;
   const timerRef = useRef(null);
   const soundRef = useRef(null);
 
-  // Charger les commandes de la pharmacie en temps réel
+  // Charger les commandes EN ATTENTE
   useEffect(() => {
     if (!pharmacyId) return;
 
@@ -43,7 +45,7 @@ export default function PharmacienOrdersScreen() {
           const dateB = new Date(b.createdAt || 0);
           return dateB - dateA;
         });
-        setOrders(result);
+        setPendingOrders(result);
         setLoading(false);
 
         // Si c'est la première commande, la notifier
@@ -54,8 +56,37 @@ export default function PharmacienOrdersScreen() {
 
       return () => unsubscribe();
     } catch (e) {
-      console.error('Erreur chargement commandes:', e);
+      console.error('Erreur chargement commandes en attente:', e);
       setLoading(false);
+    }
+  }, [pharmacyId]);
+
+  // Charger les commandes CONFIRMÉES
+  useEffect(() => {
+    if (!pharmacyId) return;
+
+    try {
+      const q = query(
+        collection(db, 'users', pharmacyId, 'orders'),
+        where('status', '==', 'confirmed')
+      );
+
+      const unsubscribe = onSnapshot(q, (querySnapshot) => {
+        const result = [];
+        querySnapshot.forEach(doc => {
+          result.push({ id: doc.id, ...doc.data() });
+        });
+        result.sort((a, b) => {
+          const dateA = new Date(a.createdAt || 0);
+          const dateB = new Date(b.createdAt || 0);
+          return dateB - dateA;
+        });
+        setConfirmedOrders(result);
+      });
+
+      return () => unsubscribe();
+    } catch (e) {
+      console.error('Erreur chargement commandes confirmées:', e);
     }
   }, [pharmacyId]);
 
@@ -128,9 +159,9 @@ export default function PharmacienOrdersScreen() {
       setNotificationOrder(null);
 
       // Si d'autres commandes en attente, notifier la suivante
-      const pendingOrders = orders.filter(o => o.id !== notificationOrder.id);
-      if (pendingOrders.length > 0) {
-        showNotificationModal(pendingOrders[0]);
+      const remainingOrders = pendingOrders.filter(o => o.id !== notificationOrder.id);
+      if (remainingOrders.length > 0) {
+        showNotificationModal(remainingOrders[0]);
       }
     } catch (e) {
       console.error('Erreur acceptation:', e);
@@ -159,12 +190,52 @@ export default function PharmacienOrdersScreen() {
       setNotificationOrder(null);
 
       // Si d'autres commandes en attente, notifier la suivante
-      const pendingOrders = orders.filter(o => o.id !== notificationOrder.id);
-      if (pendingOrders.length > 0) {
-        showNotificationModal(pendingOrders[0]);
+      const remainingOrders = pendingOrders.filter(o => o.id !== notificationOrder.id);
+      if (remainingOrders.length > 0) {
+        showNotificationModal(remainingOrders[0]);
       }
     } catch (e) {
       console.error('Erreur refus:', e);
+      Alert.alert('Erreur', 'Impossible de refuser la commande.');
+    }
+  };
+
+  // Accepter une commande depuis la liste (manuellement)
+  const acceptOrderItem = async (order) => {
+    try {
+      const orderRef = doc(db, 'users', pharmacyId, 'orders', order.id);
+      await updateDoc(orderRef, { status: 'confirmed' });
+
+      try {
+        const globalOrderRef = doc(db, 'orders', order.id);
+        await updateDoc(globalOrderRef, { status: 'confirmed' });
+      } catch (globalErr) {
+        console.log('Info: Document global non trouvé (normal si pas encore créé):', globalErr);
+      }
+
+      Alert.alert('Succès', 'Commande acceptée !');
+    } catch (e) {
+      console.error('Erreur acceptation (liste):', e);
+      Alert.alert('Erreur', 'Impossible d\'accepter la commande.');
+    }
+  };
+
+  // Refuser une commande depuis la liste (manuellement)
+  const rejectOrderItem = async (order) => {
+    try {
+      const orderRef = doc(db, 'users', pharmacyId, 'orders', order.id);
+      await updateDoc(orderRef, { status: 'rejected' });
+
+      try {
+        const globalOrderRef = doc(db, 'orders', order.id);
+        await updateDoc(globalOrderRef, { status: 'rejected' });
+      } catch (globalErr) {
+        console.log('Info: Document global non trouvé (normal si pas encore créé):', globalErr);
+      }
+
+      Alert.alert('Info', 'Commande refusée.');
+    } catch (e) {
+      console.error('Erreur refus (liste):', e);
       Alert.alert('Erreur', 'Impossible de refuser la commande.');
     }
   };
@@ -184,18 +255,43 @@ export default function PharmacienOrdersScreen() {
     );
   }
 
+  const displayedOrders = activeTab === 'pending' ? pendingOrders : confirmedOrders;
+
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Commandes en attente</Text>
+      <View style={styles.tabContainer}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'pending' && styles.tabActive]}
+          onPress={() => setActiveTab('pending')}
+        >
+          <Text style={[styles.tabText, activeTab === 'pending' && styles.tabTextActive]}>
+            En attente ({pendingOrders.length})
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'confirmed' && styles.tabActive]}
+          onPress={() => setActiveTab('confirmed')}
+        >
+          <Text style={[styles.tabText, activeTab === 'confirmed' && styles.tabTextActive]}>
+            Confirmées ({confirmedOrders.length})
+          </Text>
+        </TouchableOpacity>
+      </View>
 
-      {orders.length === 0 ? (
-        <Text style={styles.empty}>Aucune commande en attente</Text>
+      <Text style={styles.title}>
+        {activeTab === 'pending' ? 'Commandes en attente' : 'Commandes confirmées'}
+      </Text>
+
+      {displayedOrders.length === 0 ? (
+        <Text style={styles.empty}>
+          {activeTab === 'pending' ? 'Aucune commande en attente' : 'Aucune commande confirmée'}
+        </Text>
       ) : (
         <FlatList
-          data={orders}
+          data={displayedOrders}
           keyExtractor={item => item.id}
           renderItem={({ item }) => (
-            <View style={styles.card}>
+            <View style={[styles.card, activeTab === 'confirmed' && styles.cardConfirmed]}>
               <View style={styles.header}>
                 <Text style={styles.client}>Client: {item.clientEmail}</Text>
                 <Text style={styles.time}>
@@ -213,6 +309,24 @@ export default function PharmacienOrdersScreen() {
               <View style={styles.footer}>
                 <Text style={styles.total}>Total: {item.totalPrice} DA</Text>
               </View>
+
+              {activeTab === 'pending' && (
+                <View style={styles.orderButtons}>
+                  <TouchableOpacity
+                    style={[styles.orderBtn, styles.acceptBtn]}
+                    onPress={() => acceptOrderItem(item)}
+                  >
+                    <Text style={styles.orderBtnText}>✓ Accepter</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.orderBtn, styles.rejectBtn]}
+                    onPress={() => rejectOrderItem(item)}
+                  >
+                    <Text style={styles.orderBtnText}>✕ Annuler</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
           )}
         />
@@ -387,5 +501,55 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
     fontSize: 16,
+  },
+
+  // Tab Styles
+  tabContainer: {
+    flexDirection: 'row',
+    marginBottom: 20,
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 5,
+    elevation: 2,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+    borderRadius: 8,
+    backgroundColor: '#f0f0f0',
+  },
+  tabActive: {
+    backgroundColor: '#007AFF',
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+  },
+  tabTextActive: {
+    color: '#fff',
+  },
+  cardConfirmed: {
+    backgroundColor: '#e8f5e9',
+    borderLeftWidth: 4,
+    borderLeftColor: '#28A745',
+  },
+  orderButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 12,
+  },
+  orderBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginHorizontal: 6,
+  },
+  orderBtnText: {
+    color: '#fff',
+    fontWeight: '600',
   },
 });
