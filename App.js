@@ -7,6 +7,7 @@ import Login from "./Screens/login"
 import Register from "./Screens/register"
 import Home from "./Screens/home"
 import PharmacyMap from "./Screens/PharmacyMap"
+import ClientMedicineOrderScreen from "./client/ClientMedicineOrderScreen"
 
 const Stack = createNativeStackNavigator();
 
@@ -21,6 +22,7 @@ export default function App() {
        <Stack.Screen name="Home" component={Home} options={{ title: 'home' }} />
 
        <Stack.Screen name="PharmacyMap" component={PharmacyMap} options={{ title: 'PharmacyMap' }} />
+       <Stack.Screen name="ClientMedicineOrder" component={ClientMedicineOrderScreen} options={{ title: 'Commande' }} />
      </Stack.Navigator>
    </NavigationContainer>
   

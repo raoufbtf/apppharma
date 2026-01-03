@@ -1,13 +1,25 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, Switch, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TextInput, Switch, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { auth, db } from '../firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 
 export default function PharmacienProfileScreen() {
+  const navigation = useNavigation();
   const uid = auth.currentUser.uid;
 
   const [pharmacyName, setPharmacyName] = useState('');
   const [isOpen, setIsOpen] = useState(false);
+
+  const logout = async () => {
+    try {
+      await auth.signOut();
+      navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
+    } catch (e) {
+      console.error('Erreur lors de la déconnexion:', e);
+      Alert.alert('Erreur', 'La déconnexion a échoué. Réessayez.');
+    }
+  };
 
   useEffect(() => {
     const loadData = async () => {
@@ -48,6 +60,10 @@ export default function PharmacienProfileScreen() {
       <TouchableOpacity style={styles.saveBtn} onPress={save}>
         <Text style={{ color: '#fff' }}>Enregistrer</Text>
       </TouchableOpacity>
+
+      <TouchableOpacity style={styles.logoutBtn} onPress={logout}>
+        <Text style={{ color: '#fff' }}>Déconnexion</Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -70,6 +86,13 @@ const styles = StyleSheet.create({
   },
   saveBtn: {
     backgroundColor: '#28A745',
+    padding: 15,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  logoutBtn: {
+    marginTop: 15,
+    backgroundColor: '#dc3545',
     padding: 15,
     borderRadius: 10,
     alignItems: 'center',
