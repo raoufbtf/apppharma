@@ -13,6 +13,15 @@ export default function PharmacienProfileScreen() {
 
   const logout = async () => {
     try {
+      // Mettre à jour l'état d'ouverture de la pharmacie avant la déconnexion
+      try {
+        await updateDoc(doc(db, 'users', uid), { isOpen: false });
+        setIsOpen(false);
+      } catch (updateErr) {
+        console.warn('Impossible de mettre isOpen à false avant logout:', updateErr);
+        // Continuer la déconnexion même si la mise à jour échoue
+      }
+
       await auth.signOut();
       navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
     } catch (e) {
